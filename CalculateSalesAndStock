@@ -1,0 +1,68 @@
+Sub CalculateSalesAndStock()
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim i As Long
+    Dim sellSum As Double
+    Dim stockDays As Long
+    Dim sellRange As Range
+    Dim stockRange As Range
+    Dim targetWorkbook As Workbook
+    Dim targetSheet As Worksheet
+    Dim targetRow As Variant
+    Dim productCode As String
+
+    On Error GoTo ErrorHandler ' エラーハンドリング
+
+    ' 現在のワークブックの設定
+    Set ws = ThisWorkbook.Sheets("算出用")
+    
+    ' 目標ワークブックの設定
+    Set targetWorkbook = Workbooks.Open("C:\Users\Akitaka\Desktop\T2おみやげ館発注DX中\【NEW】T2おみやげ館発注書V1.0.xlsm") ' 目標ワークブックのファイルパスに置き換えてください
+    Set targetSheet = targetWorkbook.Sheets("取扱商品リスト（原紙）") ' 目標ワークシートの名前に置き換えてください
+    
+    ' 最終行を取得
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' 各行を順に処理
+    For i = 2 To lastRow
+        ' 売上合計と在庫あり日数を初期化
+        sellSum = 0
+        stockDays = 0
+        
+        ' I列からV列までの範囲を設定
+        Set sellRange = ws.Range(ws.Cells(i, 9), ws.Cells(i, 22)) ' I列からV列
+        
+        ' 商品コードを取得
+        productCode = ws.Cells(i, 4).Value ' 現在はD列
+        
+        ' H列が"売上"の場合、売上合計を計算
+        If ws.Cells(i, 8).Value = "売上" Then
+            sellSum = Application.WorksheetFunction.Sum(sellRange)
+            ' 商品コードを目標シートのB列で検索
+            targetRow = Application.Match(productCode, targetSheet.Columns("B"), 0)
+            ' 結果を書き込む
+            If Not IsError(targetRow) Then
+                targetSheet.Cells(targetRow, 13).Value = sellSum ' 売上の総和をM列に記入
+            End If
+        ElseIf ws.Cells(i, 8).Value = "在庫" Then
+            ' H列が"在庫"の場合、在庫あり日数をカウント
+            stockDays = Application.WorksheetFunction.CountIf(sellRange, "<>0")
+            ' 商品コードを目標シートのB列で検索
+            targetRow = Application.Match(productCode, targetSheet.Columns("B"), 0)
+            ' 結果を書き込む
+            If Not IsError(targetRow) Then
+                targetSheet.Cells(targetRow, 14).Value = stockDays ' 在庫あり日数をN列に記入
+            End If
+        End If
+    Next i
+
+    ' 更新完了時のメッセージ
+    MsgBox "M列、N列更新が完了しました。", vbInformation
+    
+    Exit Sub ' 正常終了ポイント
+
+ErrorHandler:
+    MsgBox "エラーが発生しました: " & Err.Description, vbCritical
+
+
+End Sub
