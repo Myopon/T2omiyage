@@ -1,0 +1,65 @@
+Sub CountWorkTimeForEachPersonInCurrentSheet()
+    Dim ws As Worksheet
+    Dim yellowColor As Long
+    Dim scheduleRange As Range
+    Dim cell As Range
+    Dim totalMinutesDict As Object
+    Dim personName As String
+    Dim totalMinutes As Long
+    Dim totalHours As Long
+    Dim remainingMinutes As Long
+    Dim output As String
+    Dim i As Integer
+    Dim key As Variant
+
+    ' 現在のシートを取得
+    Set ws = ActiveSheet
+    
+    ' 黄色の色コードを定義
+    yellowColor = RGB(255, 255, 0)
+    
+    ' 各人の総作業時間を保存する辞書を作成
+    Set totalMinutesDict = CreateObject("Scripting.Dictionary")
+    
+    ' 各人の名前をループ
+    For i = 6 To 60 ' B6からB60が名前の範囲
+        ' 現在の人の名前を取得
+        personName = ws.Cells(i, 2).Value ' B列
+        
+        ' 名前が空白であれば、その行をスキップ
+        If personName <> "" Then
+            totalMinutes = 0
+            
+            ' 現在の人の一週間の作業時間範囲を取得
+            Set scheduleRange = ws.Range(ws.Cells(i, 3), ws.Cells(i, 62)) ' C列からBJ列
+            
+            ' 作業時間範囲内の各セルをループ
+            For Each cell In scheduleRange
+                ' セルの色が黄色であれば、15分を加算
+                If cell.Interior.Color = yellowColor Then
+                    totalMinutes = totalMinutes + 15
+                End If
+            Next cell
+            
+            ' 現在の人の総作業時間を辞書に加算
+            If totalMinutesDict.exists(personName) Then
+                totalMinutesDict(personName) = totalMinutesDict(personName) + totalMinutes
+            Else
+                totalMinutesDict.Add personName, totalMinutes
+            End If
+        End If
+    Next i
+    
+    ' 出力文字列を生成
+    output = ""
+    For Each key In totalMinutesDict.Keys
+        totalMinutes = totalMinutesDict(key)
+        totalHours = totalMinutes \ 60
+        remainingMinutes = totalMinutes Mod 60
+        output = output & key & " の総作業時間: " & totalHours & "時間 " & remainingMinutes & "分" & vbCrLf
+    Next key
+    
+    ' 結果を表示
+    MsgBox output
+End Sub
+
