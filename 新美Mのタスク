@@ -87,18 +87,44 @@ Private Sub DeleteAllBarcodes()
     Dim colNum As Variant
     Dim targetCell As Range
 
-    ' 遍历工作表中的所有形状对象
+    ' 画面更新を停止
+    Application.ScreenUpdating = False
+
+    ' ワークシート上のすべての形状オブジェクトをループ処理
     For Each shp In ActiveSheet.Shapes
-        ' 检查形状是否是条形码控件（名称包含 "Barcode"）
+        ' 形状がバーコードコントロール（名前に "Barcode" を含む）であるかを確認
         If InStr(shp.Name, "Barcode") > 0 Then
-            shp.Delete ' 删除条形码形状
+            shp.Delete ' バーコード形状を削除
         End If
     Next shp
 
-    ' 遍历工作表中的所有 OLEObjects（包含条形码控件）
+    ' ワークシート上のすべてのOLEオブジェクトをループ処理
     For Each oleObj In ActiveSheet.OLEObjects
-        ' 检查对象名称是否包含 "Barcode"
+        ' オブジェクトの名前に "Barcode" が含まれているかを確認
         If InStr(oleObj.Name, "Barcode") > 0 Then
+            oleObj.Delete ' バーコードコントロールを削除
+        End If
+    Next oleObj
+
+    ' 行番号と列の基準を定義
+    baseRows = Array(11, 23, 36) ' 行番号
+    baseCols = Array("A", "J", "S") ' 列名
+
+    ' 行番号と列名をループし、対象セルを動的に生成してクリア
+    For Each rowNum In baseRows
+        For Each colNum In baseCols
+            Set targetCell = ActiveSheet.Range(colNum & rowNum).MergeArea
+            targetCell.ClearContents                ' 内容をクリア
+            targetCell.Interior.ColorIndex = xlNone ' 背景色をクリア
+        Next colNum
+    Next rowNum
+
+    ' 画面更新を再開
+    Application.ScreenUpdating = True
+
+    MsgBox "すべてのバーコードおよび指定されたセルの内容と背景色が削除されました！"
+End Sub
+ode") > 0 Then
             oleObj.Delete ' 删除条形码控件
         End If
     Next oleObj
