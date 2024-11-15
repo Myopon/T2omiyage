@@ -1,4 +1,5 @@
-Private Sub GenerateBarcodesAndSetValues()
+Sub MakePriceCard()
+
     Dim cell As Range
     Dim targetCells As Variant
     Dim i As Integer
@@ -54,7 +55,7 @@ Private Sub GenerateBarcodesAndSetValues()
     ' 一括形式コピー
     For Each rowNum In baseRows
         For Each colNum In baseCols
-            productName = Cells(targetCellIndex, "AE").Value
+            productName = Cells(targetCellIndex, "AF").Value
             If Left(productName, 1) = "■" Then
                 Set cell = Range(colNum & rowNum)
                 cell.Value = sourceCell.Value
@@ -75,10 +76,11 @@ Private Sub GenerateBarcodesAndSetValues()
     ' スクリーン更新を復元
     Application.ScreenUpdating = True
 
-    MsgBox "処が完了しました！"
-End Sub
+    MsgBox "処理が完了しました！"
 
-Private Sub DeleteAllBarcodes()
+End Sub
+Sub DeletePriceCard_Click()
+
     Dim shp As Shape
     Dim oleObj As OLEObject
     Dim baseRows As Variant
@@ -107,8 +109,8 @@ Private Sub DeleteAllBarcodes()
     Next oleObj
 
     ' 行番号と列の基準を定義
-    baseRows = Array(11, 23, 36) ' 行番号
-    baseCols = Array("A", "J", "S") ' 列名
+    baseRows = Array(11, 23, 36)
+    baseCols = Array("A", "J", "S")
 
     ' 行番号と列名をループし、対象セルを動的に生成してクリア
     For Each rowNum In baseRows
@@ -122,26 +124,6 @@ Private Sub DeleteAllBarcodes()
     ' 画面更新を再開
     Application.ScreenUpdating = True
 
-    MsgBox "すべてのバーコードおよび指定されたセルの内容と背景色が削除されました！"
+    MsgBox "削除しました！"
+
 End Sub
-ode") > 0 Then
-            oleObj.Delete ' 删除条形码控件
-        End If
-    Next oleObj
-
-    ' 定义行号和列号的基准
-    baseRows = Array(11, 23, 36) ' 行号
-    baseCols = Array("A", "J", "S") ' 列号
-
-    ' 遍历行号和列号，动态生成目标单元格
-    For Each rowNum In baseRows
-        For Each colNum In baseCols
-            Set targetCell = ActiveSheet.Range(colNum & rowNum).MergeArea
-            targetCell.ClearContents                ' 清除内容
-            targetCell.Interior.ColorIndex = xlNone ' 清除背景色
-        Next colNum
-    Next rowNum
-
-    MsgBox "所有条形码及指定单元格的内容和背景色已删除！"
-End Sub
-
