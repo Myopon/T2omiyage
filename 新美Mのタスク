@@ -9,7 +9,7 @@ Sub MakePriceCard()
     
     ' AO7の値を取得
     Dim sourceCell As Range
-    Set sourceCell = Range("AO7")
+    Set sourceCell = Range("AO6")
     
     ' バーコードを表示するセル範囲を定義
     targetCells = Array("F11", "O11", "X11", "F23", "O23", "X23", "F35", "O35", "X35")
@@ -47,10 +47,10 @@ Sub MakePriceCard()
     Dim rowNum As Variant, colNum As Variant
     Dim targetCellIndex As Integer
 
-    baseRows = Array(11, 23, 35) ' 対応する行番号
+    baseRows = Array(10, 22, 34) ' 対応する行番号
     baseCols = Array("A", "J", "S") ' 対応する列番号
 
-    targetCellIndex = 4 ' AE列の開始行（AE4）
+    targetCellIndex = 3 ' AE列の開始行（AE3）
 
     ' 一括形式コピー
     For Each rowNum In baseRows
@@ -109,7 +109,7 @@ Sub DeletePriceCard_Click()
     Next oleObj
 
     ' 行番号と列の基準を定義
-    baseRows = Array(11, 23, 36)
+    baseRows = Array(10, 22, 34)
     baseCols = Array("A", "J", "S")
 
     ' 行番号と列名をループし、対象セルを動的に生成してクリア
