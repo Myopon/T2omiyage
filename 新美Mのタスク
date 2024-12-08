@@ -32,7 +32,7 @@ Sub MakePriceCard()
         If cell.Value <> "" Then
             With ActiveSheet.OLEObjects.Add(ClassType:="BARCODE.BarCodeCtrl.1") ' バーコードコントロールを追加
                 .Name = cell.Address & "_Barcode"
-                .Object.Style = 7 ' バーコードスタイルを "code 128" に設定
+                .Object.Style = 2 ' バーコードスタイルを設定
                 .Left = cell.Left + 4 ' バーコード左側をセルの左側から4ポイント
                 .Top = cell.Top + 4 ' バーコード上側をセルの上側から4ポイント
                 .Height = 23 ' バーコードの高さを23ポイントに設定
