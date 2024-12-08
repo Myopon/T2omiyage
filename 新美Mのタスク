@@ -55,7 +55,7 @@ Sub MakePriceCard()
     ' 一括形式コピー
     For Each rowNum In baseRows
         For Each colNum In baseCols
-            productName = Cells(targetCellIndex, "AF").Value
+            productName = Cells(targetCellIndex, "AE").Value
             If Left(productName, 1) = "■" Then
                 Set cell = Range(colNum & rowNum)
                 cell.Value = sourceCell.Value
