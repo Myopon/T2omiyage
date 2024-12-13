@@ -1,5 +1,5 @@
-Sub CalculateForecastSales() 
-    ' 変数の宣言
+Sub T2OmiyageDX3() 
+    ' 変数設定
     Dim wsOrderSheet As Worksheet, wsGeneralLeadTime As Worksheet
     Dim nrow As Long, generalOrderDayColumn As Integer
     Dim orderDate As Date, productCode As String, brandCode As String
