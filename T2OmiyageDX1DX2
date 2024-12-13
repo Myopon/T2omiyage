@@ -1,0 +1,228 @@
+' T2_Omiyage Miao
+' 2024年12月13日18:50:30更新
+
+Sub T2OmiyageDX1()
+     ' シートおよび変数の定義
+    Dim wsOrderSheet As Worksheet, wsGeneralLeadTime As Worksheet, wsROYLeadTime As Worksheet
+    Dim nrow As Long, generalOrderDayColumn As Integer
+    Dim orderDate As Date, productCode As String, brandCode As String
+    Dim isOrderable As Boolean, isGeneralOrderable As Boolean
+    Dim uniqueBrands As Collection, totalOrderableBrands As Long
+
+    ' シート参照を設定
+    Set wsOrderSheet = ThisWorkbook.Sheets("食品全体（原紙）")
+    Set wsGeneralLeadTime = ThisWorkbook.Sheets("一般リードタイム")
+    Set wsROYLeadTime = ThisWorkbook.Sheets("ROYリードタイム")
+
+    ' 注文日を取得
+    orderDate = wsOrderSheet.Range("T2").Value
+    generalOrderDayColumn = WorksheetFunction.Match(wsOrderSheet.Range("T3").Value, wsGeneralLeadTime.Rows(1), 0)
+
+    ' 初期値：発注可能取引先
+    Set uniqueBrands = New Collection
+
+    ' 「食品全体（原紙）」シート内の商品をループ処理
+    For nrow = 5 To wsOrderSheet.Cells(Rows.Count, "A").End(xlUp).row
+        productCode = wsOrderSheet.Cells(nrow, "B").Value
+        brandCode = wsOrderSheet.Cells(nrow, "A").Value
+        isOrderable = True
+
+        ' ROYリードタイムの確認
+        If brandCode = "ROY" Then
+            Set foundROYCell = wsROYLeadTime.Range("B:B").Find(orderDate, LookIn:=xlValues, LookAt:=xlWhole)
+            If Not foundROYCell Is Nothing Then
+                isOrderable = (foundROYCell.Offset(0, 2).Value <> "×")
+            End If
+        Else
+            ' 一般リードタイムの確認
+            Set foundGeneralCell = wsGeneralLeadTime.Range("A:A").Find(brandCode, LookIn:=xlValues, LookAt:=xlWhole)
+            If Not foundGeneralCell Is Nothing Then
+                isGeneralOrderable = wsGeneralLeadTime.Cells(foundGeneralCell.row, generalOrderDayColumn).Value <> "×"
+            End If
+            isOrderable = isGeneralOrderable
+        End If
+
+        ' 行の表示/非表示を設定
+        wsOrderSheet.Rows(nrow).Hidden = Not isOrderable
+        
+        ' Debug メッセージ表示
+        Debug.Print "Row " & nrow & ": ProductCode " & productCode & ", Brand " & brandCode & _
+                    ", isOrderable " & isOrderable & ", isGeneralOrderable " & isGeneralOrderable
+
+        ' 発注可能なブランドの追加
+        If isOrderable Then
+            On Error Resume Next
+            uniqueBrands.Add brandCode, brandCode
+            On Error GoTo 0
+        End If
+    Next nrow
+
+    ' 注文可能なブランドの総数
+    totalOrderableBrands = uniqueBrands.Count
+
+    ' 注文可能なブランドのリストを初期化
+    Dim orderableBrandsList As String
+    orderableBrandsList = ""
+    
+    ' 注文可能なブランドのリストを作成
+    Dim brand As Variant
+    For Each brand In uniqueBrands
+        orderableBrandsList = orderableBrandsList & brand & "、"
+    Next brand
+    
+    ' 最後のカンマを削除
+    If Len(orderableBrandsList) > 0 Then
+        orderableBrandsList = Left(orderableBrandsList, Len(orderableBrandsList) - 1)
+    End If
+    
+    ' 完了メッセージボックスの表示
+    MsgBox "本日注文可能な商品を更新しました。" & vbNewLine & _
+           "本日は合計 " & totalOrderableBrands & " 取引先が注文可能です。" & vbNewLine & _
+           "注文可能な取引先: " & orderableBrandsList, vbInformation
+
+    ' PSCとIYブランドが注文可能な場合、ユーザーにウェブサイトを開くかどうか確認
+    Dim openWeb As VbMsgBoxResult
+    If Not uniqueBrands Is Nothing Then
+        If Contains(uniqueBrands, "PSC") Then
+            openWeb = MsgBox("今日はPSCが注文可能です。WEBサイトを開きますか？", vbYesNo + vbQuestion, "PSC注文可能")
+            If openWeb = vbYes Then
+                Shell "explorer.exe https://www.chainflow2.jp/pasco1/seller/Z0001/Z0001E01.aspx", vbNormalFocus
+            End If
+        End If
+        If Contains(uniqueBrands, "IY") Then
+            openWeb = MsgBox("今日はIYが注文可能です。WEBサイトを開きますか？", vbYesNo + vbQuestion, "IY注文可能")
+            If openWeb = vbYes Then
+                Shell "explorer.exe https://odr.ordering.ishiya.co.jp/jlogin", vbNormalFocus
+            End If
+        End If
+    End If
+End Sub
+Function Contains(col As Collection, key As String) As Boolean
+    ' コレクションに特定のキーが含まれているかどうかを確認するための関数
+    Dim obj As Variant
+    Contains = False
+    For Each obj In col
+        If LCase(obj) = LCase(key) Then
+            Contains = True
+            Exit Function
+        End If
+    Next obj
+End Function
+Sub T2OmiyageDX2()
+    Dim nrow As Long, lastCol As Long, nrow_1 As Long
+    Dim wb1 As Workbook, wb2 As Workbook
+    Dim sw_1 As Worksheet, sw_2 As Worksheet, wsSource As Worksheet, wsDestination As Worksheet
+    Dim targetColor As Long
+    Dim cell As Range
+    Dim dict As Object
+    Dim brandName As String
+    Dim totalPrice As Double
+    Dim lastRowSource As Long, lastRowDest As Long
+    Dim i As Integer
+    Dim brandsOver5M As String
+    Dim msgText As String
+    
+    ' ワークブックとワークシートの設定
+    Set wb1 = ThisWorkbook
+    Set wb2 = Workbooks.Open("C:\Users\Akitaka\Desktop\発注テスト\T2おみやげ館\【NEW】納品確認リスト.xlsm")
+    Set sw_1 = wb1.Sheets("食品全体（原紙）")
+    Set sw_2 = wb2.Sheets("納品確認リスト")
+    Set wsSource = sw_1
+    Set wsDestination = wb1.Sheets("発注決裁金額確認表")
+
+    ' 辞書オブジェクトの初期化
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    ' 目標色（白色）の設定
+    targetColor = RGB(255, 255, 255) ' 白色
+
+    ' "食品全体（原紙）"シートの各行をループ処理
+    For nrow_1 = 5 To sw_1.Range("B" & Rows.Count).End(xlUp).row
+        If Not sw_1.Rows(nrow_1).Hidden Then
+            Dim lookupValue As Variant
+            lookupValue = sw_1.Cells(nrow_1, "B").Value
+            Dim foundRow As Variant
+            foundRow = Application.Match(lookupValue, sw_2.Columns("B"), 0)
+            If Not IsError(foundRow) Then
+                lastCol = sw_2.Cells(foundRow, sw_2.Columns.Count).End(xlToLeft).Column
+                Dim sumResult As Double
+                sumResult = SumIfColor(sw_2.Range(sw_2.Cells(foundRow, 6), sw_2.Cells(foundRow, lastCol)), targetColor)
+                sw_1.Cells(nrow_1, "I").Value = sumResult
+            Else
+                sw_1.Cells(nrow_1, "I").Value = ""
+            End If
+        End If
+    Next nrow_1
+
+    ' 食品全体（原紙）シートでブランド名をループ
+    lastRowSource = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).row
+    For Each cell In wsSource.Range("A5:A" & lastRowSource)
+        If Not cell.EntireRow.Hidden Then
+            brandName = cell.Value
+            If IsNumeric(cell.Offset(0, 4).Value) And IsNumeric(cell.Offset(0, 18).Value) Then
+                totalPrice = cell.Offset(0, 4).Value * cell.Offset(0, 18).Value
+                If dict.exists(brandName) Then
+                    dict(brandName) = dict(brandName) + totalPrice
+                Else
+                    dict.Add brandName, totalPrice
+                End If
+            Else
+                MsgBox "行 " & cell.row & " のE列またはS列に数値でないデータがあります", vbExclamation, "型が一致しません"
+            End If
+        End If
+    Next cell
+
+    ' 発注決裁金額確認表を更新
+    lastRowDest = wsDestination.Cells(wsDestination.Rows.Count, "A").End(xlUp).row
+    For i = 3 To lastRowDest
+        brandName = wsDestination.Cells(i, "A").Value
+        If dict.exists(brandName) Then
+            wsDestination.Cells(i, "B").Value = dict(brandName)
+            If dict(brandName) > 5000000 Then
+                wsDestination.Cells(i, "B").Interior.color = RGB(255, 0, 0)
+                brandsOver5M = brandsOver5M & brandName & ", "
+            Else
+                wsDestination.Cells(i, "B").Interior.ColorIndex = xlNone
+            End If
+        End If
+    Next i
+
+    If Len(brandsOver5M) > 0 Then
+        brandsOver5M = Left(brandsOver5M, Len(brandsOver5M) - 2)
+    End If
+
+If brandsOver5M <> "" Then
+    msgText = "未納品分の集計が完了しました！" & vbCrLf & _
+              "名前を付けて保存した後、発注数を調整してください。" & vbCrLf & _
+              "データを値で貼り付けて保存することも忘れないでね。" & vbCrLf & _
+              "500万を超えるブランド: " & brandsOver5M
+    MsgBox msgText, vbInformation + vbOKOnly, "更新完了"
+Else
+    msgText = "未納品分の集計が完了しました！" & vbCrLf & _
+              "名前を付けて保存した後、発注数を調整してください。" & vbCrLf & _
+              "データを値で貼り付けて保存することも忘れないでね。" & vbCrLf & _
+              "500万を超えるブランドはありません。"
+    MsgBox msgText, vbInformation + vbOKOnly, "更新完了"
+End If
+
+
+    ' メッセージボックス表示後に"食品全体（原紙）"のI1に戻る
+    sw_1.Activate
+    sw_1.Range("I1").Select
+End Sub
+
+Function SumIfColor(rng As Range, color As Long) As Double
+    Dim cell As Range
+    Dim sum As Double
+
+    sum = 0
+    For Each cell In rng
+        If cell.Interior.color = color Then
+            If IsNumeric(cell.Value) Then
+                sum = sum + cell.Value
+            End If
+        End If
+    Next cell
+
+    SumIfColor = sum
+End Function
