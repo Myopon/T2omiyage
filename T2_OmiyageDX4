@@ -1,0 +1,75 @@
+' T2_Omiyage Miao
+' 2024年12月5日13:46:37更新
+
+Sub T2_OmiyageDX4()
+    Dim wsSource As Worksheet, wsDestination As Worksheet
+    Dim cell As Range
+    Dim dict As Object
+    Dim brandName As String
+    Dim totalPrice As Double
+    Dim lastRowSource As Long, lastRowDest As Long
+    Dim i As Integer
+
+    ' 辞書オブジェクトの初期化
+    Set dict = CreateObject("Scripting.Dictionary")
+    ' ソースシートと目的シートを設定
+    On Error Resume Next ' シートが存在しない場合のエラーを無視
+    Set wsSource = ThisWorkbook.Sheets("食品全体（原紙）")
+    Set wsDestination = ThisWorkbook.Sheets("発注決裁金額確認表")
+    On Error GoTo 0 ' エラーハンドリングを元に戻す
+
+    ' シートが見つからない場合のエラーチェック
+    If wsSource Is Nothing Or wsDestination Is Nothing Then
+        MsgBox "必要なシートが見つかりません。", vbExclamation, "エラー"
+        Exit Sub
+    End If
+
+    ' 食品全体（原紙）シートでブランド名をループ
+    lastRowSource = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).row
+    For Each cell In wsSource.Range("A5:A" & lastRowSource)
+        If Not cell.EntireRow.Hidden Then ' 行が非表示でない場合のみ計算
+            brandName = cell.Value
+            If IsNumeric(cell.Offset(0, 4).Value) And IsNumeric(cell.Offset(0, 18).Value) Then
+                totalPrice = cell.Offset(0, 4).Value * cell.Offset(0, 18).Value
+                dict(brandName) = dict(brandName) + totalPrice
+            Else
+                MsgBox "行 " & cell.row & " のE列またはS列に非数値データがあります", vbExclamation, "型が一致しません"
+            End If
+        End If
+    Next cell
+
+    ' 発注決裁金額確認表を更新
+lastRowDest = wsDestination.Cells(wsDestination.Rows.Count, "A").End(xlUp).row
+On Error Resume Next ' シートにデータが存在しない場合のエラーを無視
+For i = 3 To lastRowDest ' 目的シートのデータが2行目から始まると仮定
+    brandName = wsDestination.Cells(i, "A").Value ' 目的シートのブランド名
+    wsDestination.Cells(i, "B").Value = dict(brandName)
+    ' 金額が500万を超える場合、背景色を赤に設定
+    If dict(brandName) > 5000000 Then
+        wsDestination.Cells(i, "B").Interior.color = RGB(255, 0, 0)
+        brandsOver5M = brandsOver5M & brandName & ", "
+    Else
+        wsDestination.Cells(i, "B").Interior.ColorIndex = xlNone
+    End If
+Next i
+On Error GoTo 0 ' エラーハンドリングを元に戻す
+
+' 500万を超えるブランドのリストを修正
+If Len(brandsOver5M) > 0 Then
+    brandsOver5M = Left(brandsOver5M, Len(brandsOver5M) - 2)
+End If
+
+' 更新完了のメッセージボックスを表示
+If brandsOver5M <> "" Then
+    msgText = "ブランドごとの発注総金額を更新しました" & vbCrLf & vbCrLf & _
+              "情報は下記の通りです。" & vbCrLf & vbCrLf & _
+              "500万を超えるブランド: " & brandsOver5M
+    MsgBox msgText, vbInformation + vbOKOnly, "更新完了"
+Else
+    msgText = "ブランドごとの発注総金額を更新しました！" & vbCrLf & vbCrLf & _
+              "情報は下記の通りです。" & vbCrLf & vbCrLf & _
+              "500万を超えるブランドはありません。"
+    MsgBox msgText, vbInformation + vbOKOnly, "更新完了"
+End If
+End Sub
+
