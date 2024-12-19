@@ -1,18 +1,14 @@
-Sub T2OmiyageDX3() 
+Sub T2OmiyageDX3()
     ' 変数設定
     Dim wsOrderSheet As Worksheet, wsGeneralLeadTime As Worksheet
     Dim nrow As Long, generalOrderDayColumn As Integer
     Dim orderDate As Date, productCode As String, brandCode As String
     Dim leadTimeDays As Variant, predictedSales As Double
-    Dim stockTotal As Double, recentAvg As Double
+    Dim stockTotal As Variant, recentAvg As Variant
     Dim generalLeadTimeRow As Range
     Dim dayOfWeek As Integer
-    Dim orderDateStr As String
-    Dim orderCanBePlaced As Boolean
-    Dim totalLeadTime As Integer
-    Dim nextOrderDate As Date
-    Dim nextLeadTime As Integer
     Dim i As Integer
+    Dim nextLeadTime As Integer
 
     ' ワークシートの設定
     On Error GoTo ErrorHandler
@@ -26,102 +22,61 @@ Sub T2OmiyageDX3()
         Exit Sub
     End If
     
-    ' デバッグ情報を出力し、注文日が正しいことを確認
-    Debug.Print "注文日 T2: " & orderDate
-
-    ' 注文日の曜日を取得（1=日曜日, 2=月曜日, ...）
+    ' 注文日の曜日を取得
     dayOfWeek = Weekday(orderDate, vbSunday)
-    Debug.Print "注文日の曜日: " & dayOfWeek
 
     ' 一般リードタイム表の列位置を取得
-    On Error Resume Next ' エラー処理、エラーを防ぐ
+    On Error Resume Next
     generalOrderDayColumn = WorksheetFunction.Match(wsOrderSheet.Range("T3").Value, wsGeneralLeadTime.Rows(1), 0)
-    On Error GoTo ErrorHandler ' 通常のエラー処理に戻す
+    On Error GoTo ErrorHandler
     If generalOrderDayColumn = 0 Then
         MsgBox "列 T3 に指定された日付が見つかりません。データを確認してください！", vbExclamation
         Exit Sub
     End If
 
-    ' デバッグ情報を出力し、列位置が正しいことを確認
-    Debug.Print "一般リードタイム表の列位置: " & generalOrderDayColumn
-
-    ' 「食品全体（原紙）」シート内の商品をループ処理
-    For nrow = 5 To wsOrderSheet.Cells(Rows.Count, "A").End(xlUp).row
+    ' シート内の商品をループ処理
+    For nrow = 5 To wsOrderSheet.Cells(Rows.Count, "A").End(xlUp).Row
         productCode = wsOrderSheet.Cells(nrow, "B").Value
         brandCode = wsOrderSheet.Cells(nrow, "A").Value
-
-        ' デバッグ情報を出力し、各行のデータを確認
-        Debug.Print "処理中の行 " & nrow & ": ブランド " & brandCode & ", 商品コード " & productCode
 
         ' ブランドに対応する一般リードタイムデータを検索
         Set generalLeadTimeRow = wsGeneralLeadTime.Range("A:A").Find(brandCode, LookIn:=xlValues, LookAt:=xlWhole)
 
         If Not generalLeadTimeRow Is Nothing Then
-            ' デバッグ情報を出力し、ブランドが見つかったことを確認
-            Debug.Print "ブランド " & brandCode & " が一般リードタイム表に見つかりました"
-
-            ' そのブランドの注文可能な曜日と到着日数を取得
-            leadTimeDays = wsGeneralLeadTime.Cells(generalLeadTimeRow.row, generalOrderDayColumn).Value ' 対応する曜日の到着日数を取得
-
-            ' デバッグ情報を出力し、到着日数を確認
-            Debug.Print "ブランド " & brandCode & " の到着日数: " & leadTimeDays
-
-            ' もしそのブランドが発注できない場合、「×」なら計算をスキップ
-            If Trim(leadTimeDays) = "×" Then
+            leadTimeDays = wsGeneralLeadTime.Cells(generalLeadTimeRow.Row, generalOrderDayColumn).Value
+            
+            ' 非数値や "×" を処理
+            If Not IsNumeric(leadTimeDays) Or Trim(leadTimeDays) = "×" Then
                 Debug.Print "ブランド " & brandCode & " は発注不可です。スキップします"
                 GoTo SkipRow
             End If
 
-            ' 現在行の合計在庫と直近平均値を取得
+            ' 合計在庫と直近平均値を取得
             stockTotal = wsOrderSheet.Cells(nrow, "L").Value
             recentAvg = wsOrderSheet.Cells(nrow, "O").Value
-
-            ' デバッグ情報を出力し、合計在庫と直近平均値を確認
-            Debug.Print "合計在庫 (L列): " & stockTotal & ", 直近平均値 (O列): " & recentAvg
-
-            ' 合計在庫と直近平均値が有効か確認
+            
+            ' 数値チェック
             If IsNumeric(stockTotal) And IsNumeric(recentAvg) Then
-                ' 注文可能かどうかを確認
-                orderCanBePlaced = (Trim(leadTimeDays) <> "×")
-                
-                If orderCanBePlaced Then
-                    ' 注文可能な場合、次回発注後の到着総日数を計算
-                    ' 各ブランドのリードタイムに基づいて次回の到着日数を決定
-                    nextLeadTime = 0
-                    For i = 1 To 7 ' 月曜日から日曜日まで
-                        If Trim(wsGeneralLeadTime.Cells(generalLeadTimeRow.row, i + 1).Value) <> "×" Then
-                            ' 注文可能日を見つけ、次回発注後の到着日数を計算
-                            If dayOfWeek <= i Then
-                                nextLeadTime = wsGeneralLeadTime.Cells(generalLeadTimeRow.row, i + 1).Value
-                                Exit For
-                            End If
-                        End If
-                    Next i
-                    
-                    Debug.Print "次回発注後の到着日数: " & nextLeadTime
-                Else
-                    ' 発注不可の場合は、リードタイムが無効とみなす
-                    nextLeadTime = 0
-                End If
+                stockTotal = CDbl(stockTotal)
+                recentAvg = CDbl(recentAvg)
+
+                ' 次回発注後の到着日数を計算
+                nextLeadTime = leadTimeDays
+                Debug.Print "ブランド " & brandCode & " 次回発注後の到着日数: " & nextLeadTime
 
                 ' 予測売れ数を計算
                 predictedSales = stockTotal - (recentAvg * nextLeadTime)
-                ' 計算結果をP列に入力
                 wsOrderSheet.Cells(nrow, "P").Value = predictedSales
-
-                ' デバッグ情報を出力し、計算結果を確認
-                Debug.Print "予測売れ数 (P列): " & predictedSales
             Else
-                Debug.Print "行 " & nrow & " の合計在庫または直近平均値が無効です: " & stockTotal & ", " & recentAvg
+                Debug.Print "行 " & nrow & " のデータ無効（在庫または平均値）"
             End If
         Else
-            Debug.Print "ブランド " & brandCode & " は一般リードタイム表に見つかりません"
+            Debug.Print "ブランド " & brandCode & " が一般リードタイム表に見つかりません"
         End If
 
 SkipRow:
     Next nrow
 
-    ' 完了メッセージを表示
     MsgBox "予測売れ数が更新されました。", vbInformation
     Exit Sub
 
