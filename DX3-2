@@ -1,0 +1,157 @@
+Sub CalculatePredictedSales()
+    Dim wsOrderSheet As Worksheet, wsGeneralLeadTime As Worksheet
+    Dim nrow As Long, i As Integer
+    Dim orderDate As Date, dayOfWeek As Integer
+    Dim brandCode As String, productCode As String
+    Dim recentAvg As Variant, leadTimeToday As Variant, nextLeadTime As Variant
+    Dim generalLeadTimeRow As Range
+    Dim daysToNextOrder As Integer, totalDays As Integer
+    Dim firstArrivalDays As Integer, nextArrivalDays As Integer
+    Dim overlapDays As Integer
+    Dim logFile As String, fileNum As Integer
+
+    ' 日志文件路径
+    logFile = ThisWorkbook.Path & "\DebugLog.txt"
+    fileNum = FreeFile
+
+    ' 打开日志文件
+    Open logFile For Output As #fileNum
+
+    ' 设置工作表
+    Set wsOrderSheet = ThisWorkbook.Sheets("食品全体（原紙）")
+    Set wsGeneralLeadTime = ThisWorkbook.Sheets("一般リードタイム")
+
+    ' 获取订单日期和星期几
+    orderDate = wsOrderSheet.Range("T2").Value
+    If IsEmpty(orderDate) Then
+        Print #fileNum, "订单日期(T2)为空，请检查数据！"
+        Close #fileNum
+        MsgBox "订单日期(T2)为空，请检查数据！", vbExclamation
+        Exit Sub
+    End If
+    dayOfWeek = Weekday(orderDate, vbMonday) ' 1=星期一, ..., 7=星期日
+
+    Print #fileNum, "处理开始，订单日期: " & Format(orderDate, "yyyy-mm-dd") & ", 星期: " & dayOfWeek
+
+    ' 循环处理每个商品
+    For nrow = 5 To wsOrderSheet.Cells(wsOrderSheet.Rows.Count, "A").End(xlUp).row
+        brandCode = Trim(wsOrderSheet.Cells(nrow, "A").Value)
+        productCode = Trim(wsOrderSheet.Cells(nrow, "B").Value)
+        wsOrderSheet.Cells(nrow, "P").ClearContents ' 清除旧的预测值
+
+        If brandCode = "" Then
+            Print #fileNum, "第" & nrow & "行品牌代码为空，跳过。"
+            GoTo SkipRow
+        End If
+
+        ' 在一般到货时间表中查找品牌
+        Set generalLeadTimeRow = wsGeneralLeadTime.Range("A:A").Find(brandCode, LookIn:=xlValues, LookAt:=xlWhole)
+        If Not generalLeadTimeRow Is Nothing Then
+            ' 获取最近平均值
+            recentAvg = wsOrderSheet.Cells(nrow, "O").Value
+            If IsNumeric(recentAvg) And recentAvg > 0 Then
+                recentAvg = CDbl(recentAvg)
+
+                ' 获取当天到货时间
+leadTimeToday = wsGeneralLeadTime.Cells(generalLeadTimeRow.row, dayOfWeek + 4).Value
+Print #fileNum, "品牌: " & brandCode & "，商品: " & productCode & "，读取的当天到货时间值: " & leadTimeToday
+
+If IsNumeric(leadTimeToday) And Val(leadTimeToday) > 0 Then
+    firstArrivalDays = CInt(leadTimeToday)
+ElseIf Trim(leadTimeToday) = "×" Or Trim(leadTimeToday) = "" Then
+    Print #fileNum, "品牌: " & brandCode & "，商品: " & productCode & "，当天不可订购或数据为空。"
+    GoTo SkipRow
+Else
+    Print #fileNum, "品牌: " & brandCode & "，商品: " & productCode & "，数据格式异常: " & leadTimeToday
+    GoTo SkipRow
+End If
+
+
+                ' 查找下一次订购日
+daysToNextOrder = 0
+nextArrivalDays = 0
+Print #fileNum, "当前星期: " & dayOfWeek & "，开始查找下一次订购日..."
+
+For i = 1 To 7
+    Dim nextDayOfWeek As Integer, nextColumnIndex As Integer
+    nextDayOfWeek = (dayOfWeek + i - 1) Mod 7 + 1 ' 循环计算星期几
+    nextColumnIndex = nextDayOfWeek + 4 ' 列索引：星期一对应E列(5)，星期日对应K列(11)
+    
+    nextLeadTime = wsGeneralLeadTime.Cells(generalLeadTimeRow.row, nextColumnIndex).Value
+    Print #fileNum, "  检查第" & i & "天 (下一个星期: " & nextDayOfWeek & ")，列索引: " & nextColumnIndex & "，值: " & nextLeadTime
+
+    ' 检查值是否有效
+    If IsNumeric(nextLeadTime) Then
+        daysToNextOrder = i ' 记录到下一个可订货日的天数
+        nextArrivalDays = CInt(nextLeadTime)
+        Print #fileNum, "    找到下一次可订货日，星期: " & nextDayOfWeek & "，所需天数: " & daysToNextOrder
+        Exit For
+    End If
+Next i
+
+' 如果没有找到下一次订购日，记录并跳过
+If daysToNextOrder = 0 Then
+    Print #fileNum, "未找到下一次可订货日，跳过此商品。"
+    GoTo SkipRow
+End If
+
+
+
+
+                ' 修正后的重复天数计算逻辑
+Dim firstArrivalStart As Integer, uniqueDays As Integer
+firstArrivalStart = 1 ' 第一次到货总是从第1天开始
+firstArrivalEnd = firstArrivalDays ' 第一次到货结束日
+
+secondArrivalStart = daysToNextOrder ' 第二次订购日开始
+secondArrivalEnd = daysToNextOrder + nextArrivalDays - 1 ' 第二次到货结束
+
+' 计算覆盖的独立天数
+uniqueDays = secondArrivalEnd - firstArrivalStart + 1 ' 总覆盖时间范围
+overlapDays = Application.Max(0, firstArrivalEnd - secondArrivalStart + 1) ' 重叠天数
+
+Print #fileNum, " 计算重复天数: "
+Print #fileNum, "    第一次到货开始日: " & firstArrivalStart
+Print #fileNum, "    第一次到货结束日: " & firstArrivalEnd
+Print #fileNum, "    第二次到货开始日: " & secondArrivalStart
+Print #fileNum, "    第二次到货结束日: " & secondArrivalEnd
+Print #fileNum, "    重复天数 (overlapDays): " & overlapDays
+
+' 修正后的总天数计算
+totalDays = uniqueDays - overlapDays
+
+
+                ' 计算总天数
+Print #fileNum, "品牌: " & brandCode & "，商品: " & productCode
+Print #fileNum, "第一到货天数 (firstArrivalDays): " & firstArrivalDays
+Print #fileNum, "下一次订购日所需天数 (daysToNextOrder): " & daysToNextOrder
+Print #fileNum, "下一次到货天数 (nextArrivalDays): " & nextArrivalDays
+Print #fileNum, "重复天数 (overlapDays): " & overlapDays
+
+totalDays = firstArrivalDays + daysToNextOrder + nextArrivalDays - overlapDays
+
+Print #fileNum, "总天数 (totalDays) 计算过程: " & _
+                "totalDays = firstArrivalDays (" & firstArrivalDays & ") + " & _
+                "daysToNextOrder (" & daysToNextOrder & ") + " & _
+                "nextArrivalDays (" & nextArrivalDays & ") - " & _
+                "overlapDays (" & overlapDays & ")"
+Print #fileNum, "总天数 (totalDays): " & totalDays
+
+                ' 计算预测销售量
+                wsOrderSheet.Cells(nrow, "P").Value = recentAvg * totalDays
+                Print #fileNum, "品牌: " & brandCode & "，商品: " & productCode & "，最近平均值: " & recentAvg & "，预测销售量: " & wsOrderSheet.Cells(nrow, "P").Value
+            Else
+                Print #fileNum, "品牌: " & brandCode & "，商品: " & productCode & "，最近平均值无效或为0: " & recentAvg
+            End If
+        Else
+            Print #fileNum, "品牌: " & brandCode & "，商品: " & productCode & "，在一般到货时间表中未找到。"
+        End If
+SkipRow:
+    Next nrow
+
+    ' 关闭日志文件
+    Close #fileNum
+
+    MsgBox "预测销售量计算完成。", vbInformation
+End Sub
+
