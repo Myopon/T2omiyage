@@ -1,3 +1,5 @@
+' T2_Omiyage Miao
+' 2024年12月26日16:53:34更新
 Sub T2OmiyageDX3()
     Dim wsOrderSheet As Worksheet, wsGeneralLeadTime As Worksheet
     Dim nrow As Long, i As Integer
