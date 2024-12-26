@@ -1,5 +1,5 @@
 ' T2_Omiyage Miao
-' 2024年12月13日18:50:30更新
+' 2024年12月26日15:55:49更新
 
 Sub T2OmiyageDX1()
      ' シートおよび変数の定義
@@ -22,7 +22,7 @@ Sub T2OmiyageDX1()
     Set uniqueBrands = New Collection
 
     ' 「食品全体（原紙）」シート内の商品をループ処理
-    For nrow = 5 To wsOrderSheet.Cells(Rows.Count, "A").End(xlUp).row
+    For nrow = 5 To wsOrderSheet.Cells(Rows.Count, "A").End(xlUp).Row
         productCode = wsOrderSheet.Cells(nrow, "B").Value
         brandCode = wsOrderSheet.Cells(nrow, "A").Value
         isOrderable = True
@@ -37,7 +37,7 @@ Sub T2OmiyageDX1()
             ' 一般リードタイムの確認
             Set foundGeneralCell = wsGeneralLeadTime.Range("A:A").Find(brandCode, LookIn:=xlValues, LookAt:=xlWhole)
             If Not foundGeneralCell Is Nothing Then
-                isGeneralOrderable = wsGeneralLeadTime.Cells(foundGeneralCell.row, generalOrderDayColumn).Value <> "×"
+                isGeneralOrderable = wsGeneralLeadTime.Cells(foundGeneralCell.Row, generalOrderDayColumn).Value <> "×"
             End If
             isOrderable = isGeneralOrderable
         End If
@@ -89,8 +89,8 @@ Sub T2OmiyageDX1()
                 Shell "explorer.exe https://www.chainflow2.jp/pasco1/seller/Z0001/Z0001E01.aspx", vbNormalFocus
             End If
         End If
-        If Contains(uniqueBrands, "IY") Then
-            openWeb = MsgBox("今日はIYが注文可能です。WEBサイトを開きますか？", vbYesNo + vbQuestion, "IY注文可能")
+        If Contains(uniqueBrands, "BAN") Then
+            openWeb = MsgBox("今日はBANが注文可能です。WEBサイトを開きますか？", vbYesNo + vbQuestion, "BAN注文可能")
             If openWeb = vbYes Then
                 Shell "explorer.exe https://odr.ordering.ishiya.co.jp/jlogin", vbNormalFocus
             End If
@@ -108,6 +108,7 @@ Function Contains(col As Collection, key As String) As Boolean
         End If
     Next obj
 End Function
+
 Sub T2OmiyageDX2()
     Dim nrow As Long, lastCol As Long, nrow_1 As Long
     Dim wb1 As Workbook, wb2 As Workbook
@@ -136,18 +137,28 @@ Sub T2OmiyageDX2()
     ' 目標色（白色）の設定
     targetColor = RGB(255, 255, 255) ' 白色
 
-    ' "食品全体（原紙）"シートの各行をループ処理
-    For nrow_1 = 5 To sw_1.Range("B" & Rows.Count).End(xlUp).row
+    ' "納品確認リスト"シートのD列を更新
+    For nrow = 2 To sw_2.Cells(sw_2.Rows.Count, "B").End(xlUp).Row
+        Dim lookupValue As Variant
+        Dim sumResult As Double
+        lookupValue = sw_2.Cells(nrow, "B").Value
+        If Not IsEmpty(lookupValue) Then
+            lastCol = sw_2.Cells(nrow, sw_2.Columns.Count).End(xlToLeft).Column
+            sumResult = SumIfColor(sw_2.Range(sw_2.Cells(nrow, 5), sw_2.Cells(nrow, lastCol)), targetColor)
+            sw_2.Cells(nrow, "D").Value = sumResult
+        Else
+            sw_2.Cells(nrow, "D").Value = ""
+        End If
+    Next nrow
+
+    ' "食品全体（原紙）"シートのI列を更新
+    For nrow_1 = 5 To sw_1.Range("B" & Rows.Count).End(xlUp).Row
         If Not sw_1.Rows(nrow_1).Hidden Then
-            Dim lookupValue As Variant
             lookupValue = sw_1.Cells(nrow_1, "B").Value
             Dim foundRow As Variant
-            foundRow = Application.Match(lookupValue, sw_2.Columns("B"), 0)
+            foundRow = Application.Match(looku2??pValue, sw_2.Columns("B"), 0)
             If Not IsError(foundRow) Then
-                lastCol = sw_2.Cells(foundRow, sw_2.Columns.Count).End(xlToLeft).Column
-                Dim sumResult As Double
-                sumResult = SumIfColor(sw_2.Range(sw_2.Cells(foundRow, 6), sw_2.Cells(foundRow, lastCol)), targetColor)
-                sw_1.Cells(nrow_1, "I").Value = sumResult
+                sw_1.Cells(nrow_1, "I").Value = sw_2.Cells(foundRow, "D").Value
             Else
                 sw_1.Cells(nrow_1, "I").Value = ""
             End If
@@ -155,7 +166,7 @@ Sub T2OmiyageDX2()
     Next nrow_1
 
     ' 食品全体（原紙）シートでブランド名をループ
-    lastRowSource = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).row
+    lastRowSource = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
     For Each cell In wsSource.Range("A5:A" & lastRowSource)
         If Not cell.EntireRow.Hidden Then
             brandName = cell.Value
@@ -167,13 +178,13 @@ Sub T2OmiyageDX2()
                     dict.Add brandName, totalPrice
                 End If
             Else
-                MsgBox "行 " & cell.row & " のE列またはS列に数値でないデータがあります", vbExclamation, "型が一致しません"
+                MsgBox "行 " & cell.Row & " のE列またはS列に数値でないデータがあります", vbExclamation, "型が一致しません"
             End If
         End If
     Next cell
 
     ' 発注決裁金額確認表を更新
-    lastRowDest = wsDestination.Cells(wsDestination.Rows.Count, "A").End(xlUp).row
+    lastRowDest = wsDestination.Cells(wsDestination.Rows.Count, "A").End(xlUp).Row
     For i = 3 To lastRowDest
         brandName = wsDestination.Cells(i, "A").Value
         If dict.exists(brandName) Then
@@ -191,20 +202,19 @@ Sub T2OmiyageDX2()
         brandsOver5M = Left(brandsOver5M, Len(brandsOver5M) - 2)
     End If
 
-If brandsOver5M <> "" Then
-    msgText = "未納品分の集計が完了しました！" & vbCrLf & _
-              "名前を付けて保存した後、発注数を調整してください。" & vbCrLf & _
-              "データを値で貼り付けて保存することも忘れないでね。" & vbCrLf & _
-              "500万を超えるブランド: " & brandsOver5M
-    MsgBox msgText, vbInformation + vbOKOnly, "更新完了"
-Else
-    msgText = "未納品分の集計が完了しました！" & vbCrLf & _
-              "名前を付けて保存した後、発注数を調整してください。" & vbCrLf & _
-              "データを値で貼り付けて保存することも忘れないでね。" & vbCrLf & _
-              "500万を超えるブランドはありません。"
-    MsgBox msgText, vbInformation + vbOKOnly, "更新完了"
-End If
-
+    If brandsOver5M <> "" Then
+        msgText = "未納品分の集計が完了しました！" & vbCrLf & _
+                  "名前を付けて保存した後、発注数を調整してください。" & vbCrLf & _
+                  "データを値で貼り付けて保存することも忘れないでね。" & vbCrLf & _
+                  "500万を超えるブランド: " & brandsOver5M
+        MsgBox msgText, vbInformation + vbOKOnly, "更新完了"
+    Else
+        msgText = "未納品分の集計が完了しました！" & vbCrLf & _
+                  "名前を付けて保存した後、発注数を調整してください。" & vbCrLf & _
+                  "データを値で貼り付けて保存することも忘れないでね。" & vbCrLf & _
+                  "500万を超えるブランドはありません。"
+        MsgBox msgText, vbInformation + vbOKOnly, "更新完了"
+    End If
 
     ' メッセージボックス表示後に"食品全体（原紙）"のI1に戻る
     sw_1.Activate
