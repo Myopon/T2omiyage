@@ -1,0 +1,148 @@
+Sub T2omiyageDX5()
+    ' エラーハンドリング
+    On Error GoTo ErrorHandler
+
+    ' 変数の定義
+    Dim nrow As Long, i As Long, wb1 As Workbook, wb2 As Workbook
+    Dim sw_1 As Worksheet, sw_2 As Worksheet, sw_generalLeadTime As Worksheet, sw_ROYLeadTime As Worksheet
+    Dim brandName As String, productCode As String
+    Dim orderDate As Date, deliveryDate As Date
+    Dim orderQuantity As Integer, colIndex As Integer
+    Dim weekdayColumn As Integer, deliveryDays As Variant
+    Dim lastRow As Long, found As Boolean
+    Dim foundRow As Range, overwriteAll As Boolean, asked As Boolean
+
+    ' ユーザーが選択したファイルパスの取得
+    Dim filePath As Variant
+    filePath = Application.GetOpenFilename("Excel ファイル (*.xlsm), *.xlsm")
+
+    ' ユーザーがファイルを選択しなかった場合の処理
+    If filePath = False Then
+        MsgBox "処理がキャンセルされました。", vbInformation
+        Exit Sub
+    End If
+
+    ' ワークブックとシートの設定
+    Set wb1 = Workbooks.Open(filePath)
+    Set wb2 = ThisWorkbook
+    Set sw_1 = wb1.Sheets("食品全体（原紙）")
+    Set sw_2 = wb2.Sheets("納品確認リスト")
+    Set sw_generalLeadTime = wb1.Sheets("一般リードタイム")
+    Set sw_ROYLeadTime = wb1.Sheets("ROYリードタイム")
+    orderDate = sw_1.Range("T2").Value
+
+    ' 曜日列の計算
+    weekdayColumn = WorksheetFunction.Weekday(orderDate, 1) + 4  ' 日曜はE列で、インデックスは5
+    overwriteAll = False
+    asked = False
+
+    ' 各行のデータ処理
+    For nrow = 5 To sw_1.Range("B" & Rows.Count).End(xlUp).Row
+        ' 行が非表示の場合、この行をスキップ
+        If sw_1.Rows(nrow).Hidden Then
+            Debug.Print "非表示の行をスキップ: " & nrow
+            GoTo NextIteration
+        End If
+
+        ' 行データの読み取り
+        brandName = sw_1.Range("A" & nrow).Value
+        productCode = sw_1.Range("B" & nrow).Value
+        orderQuantity = sw_1.Range("S" & nrow).Value
+
+        ' ブランドを確認し配達日数を計算
+        deliveryDays = "×"
+        If brandName = "ROY" Then
+            Set foundROYCell = sw_ROYLeadTime.Range("B:B").Find(orderDate, LookIn:=xlValues, LookAt:=xlWhole)
+            If Not foundROYCell Is Nothing Then
+                deliveryDays = foundROYCell.Offset(0, 2).Value
+            End If
+        Else
+            Set foundGeneralCell = sw_generalLeadTime.Columns(1).Find(brandName, LookIn:=xlValues, LookAt:=xlWhole)
+            If Not foundGeneralCell Is Nothing Then
+                deliveryDays = sw_generalLeadTime.Cells(foundGeneralCell.Row, weekdayColumn).Value
+            Else
+                deliveryDays = "×"
+            End If
+        End If
+
+        ' デバッグ出力
+        Debug.Print "行 " & nrow & ": ブランド " & brandName & ", 商品コード " & productCode & _
+                    ", 注文数量 " & orderQuantity & ", 配達日数 " & deliveryDays
+
+        ' 配達日数が「×」でなければ処理続行
+        If deliveryDays <> "×" Then
+            ' 配達日の計算
+            If deliveryDays = 0 Then
+                deliveryDate = orderDate
+            Else
+                deliveryDate = orderDate + deliveryDays
+            End If
+
+            ' 納品確認リストで商品コードを検索し数量を更新
+            Dim matchRow As Long
+            matchRow = 0
+            For i = 3 To sw_2.Range("B" & Rows.Count).End(xlUp).Row
+                If sw_2.Cells(i, "B").Value = productCode Then
+                    matchRow = i
+                    Exit For
+                End If
+            Next i
+
+            ' 対応する納品日の列を探す
+            colIndex = 0
+            For i = 2 To sw_2.Cells(1, Columns.Count).End(xlToLeft).Column
+                If sw_2.Cells(1, i).Value = deliveryDate Then
+                    colIndex = i
+                    Exit For
+                End If
+            Next i
+
+            ' 商品数量を更新
+            If matchRow > 0 And colIndex > 0 Then
+                If Not IsEmpty(sw_2.Cells(matchRow, colIndex).Value) Then
+                    If Not asked Then
+                        Dim response As VbMsgBoxResult
+                        Dim cellAddress As String
+                        cellAddress = sw_2.Cells(matchRow, colIndex).Address(False, False)
+                        response = MsgBox("セル " & cellAddress & " には既に値が存在します。全て上書きしますか？", vbYesNo + vbQuestion, "確認")
+                        asked = True
+                        If response = vbYes Then
+                            overwriteAll = True
+                        Else
+                            response = MsgBox("新しい数値を既存のセルの合計値に加えて更新しますか？", vbYesNo + vbQuestion, "合計更新")
+                            If response = vbYes Then
+                                sw_2.Cells(matchRow, colIndex).Value = sw_2.Cells(matchRow, colIndex).Value + orderQuantity
+                                GoTo NextIteration
+                            Else
+                                MsgBox "処理がキャンセルされました。", vbInformation
+                                Exit For
+                            End If
+                        End If
+                    End If
+                End If
+                If overwriteAll Or IsEmpty(sw_2.Cells(matchRow, colIndex).Value) Then
+                    sw_2.Cells(matchRow, colIndex).Value = IIf(orderQuantity = 0, "", orderQuantity)
+                End If
+            End If
+        End If
+
+NextIteration:
+    Next nrow
+
+    ' 処理完了のメッセージボックスを表示
+    If Not overwriteAll Then
+        MsgBox "発注数を納品リストに处理しました。", vbInformation
+    End If
+
+    ' 納品確認リストをアクティブにし、最初の行を選択
+    sw_2.Activate
+    sw_2.Range("A3").Select
+
+    Exit Sub
+
+ErrorHandler:
+    ' エラー発生時のメッセージボックス表示
+    MsgBox "エラーが発生しました: " & Err.Description, vbCritical
+    Exit Sub
+End Sub
+
