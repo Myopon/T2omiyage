@@ -32,7 +32,7 @@ Sub T2omiyageDX5()
     orderDate = sw_1.Range("T2").Value
 
     ' 曜日列の計算
-    weekdayColumn = WorksheetFunction.Weekday(orderDate, 1) + 4  ' 日曜はE列で、インデックスは5
+    weekdayColumn = WorksheetFunction.Weekday(orderDate, 2) + 4  ' 月曜はE列で、インデックスは5
     overwriteAll = False
     asked = False
 
