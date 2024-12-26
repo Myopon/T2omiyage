@@ -1,133 +1,110 @@
-
-Sub CalculatePredictedSales()
+Sub T2OmiyageDX3()
     Dim wsOrderSheet As Worksheet, wsGeneralLeadTime As Worksheet
     Dim nrow As Long, i As Integer
     Dim orderDate As Date, dayOfWeek As Integer
     Dim brandCode As String, productCode As String
     Dim recentAvg As Variant, leadTimeToday As Variant, nextLeadTime As Variant
     Dim generalLeadTimeRow As Range
-    Dim daysToNextOrder As Integer, totalDays As Integer
-    Dim firstArrivalDays As Integer, secondArrivalDays As Integer
-    Dim isEverydayOrderable As Boolean
-    Dim logFile As String, logText As String
-    Dim fileNum As Integer
+    Dim totalDays As Integer
+    Dim firstArrivalDays As Integer, nextArrivalDays As Integer
+    Dim nextOrderInterval As Integer
+    Dim logFile As String, fileNum As Integer
 
-    ' ログファイルのパスを設定
+    ' ログファイルのパス
     logFile = ThisWorkbook.Path & "\DebugLog.txt"
     fileNum = FreeFile
 
-    ' ログファイルを開いて書き込み
+    ' ログファイルを開く
     Open logFile For Output As #fileNum
 
-    ' ワークシートの設定
+    ' ワークシートを設定
     Set wsOrderSheet = ThisWorkbook.Sheets("食品全体（原紙）")
     Set wsGeneralLeadTime = ThisWorkbook.Sheets("一般リードタイム")
 
-    ' 現在の注文日と曜日を取得
+    ' 注文日と曜日を取得
     orderDate = wsOrderSheet.Range("T2").Value
     If IsEmpty(orderDate) Then
-        Print #fileNum, "注文日(T2)が空です。データを確認してください！"
+        Print #fileNum, "注文日(T2)が空です。データを確認してください。"
         Close #fileNum
-        MsgBox "注文日(T2)が空です。データを確認してください！", vbExclamation
+        MsgBox "注文日(T2)が空です。データを確認してください。", vbExclamation
         Exit Sub
     End If
-    dayOfWeek = Weekday(orderDate, vbSunday) ' 1=日曜日, 2=月曜日, ..., 7=土曜日
+    dayOfWeek = Weekday(orderDate, vbMonday) ' 1=月曜日, ..., 7=日曜日
 
     Print #fileNum, "処理開始、注文日: " & Format(orderDate, "yyyy-mm-dd") & ", 曜日: " & dayOfWeek
 
-    ' 注文表の商品の処理をループ
-    For nrow = 5 To wsOrderSheet.Cells(wsOrderSheet.Rows.Count, "A").End(xlUp).row
+    ' 商品ごとにループ処理
+    For nrow = 5 To wsOrderSheet.Cells(wsOrderSheet.Rows.Count, "A").End(xlUp).Row
         brandCode = Trim(wsOrderSheet.Cells(nrow, "A").Value)
-        productCode = Trim(wsOrderSheet.Cells(nrow, "B").Value) ' 商品コードを取得
-        wsOrderSheet.Cells(nrow, "P").ClearContents ' 古い値をクリア
+        productCode = Trim(wsOrderSheet.Cells(nrow, "B").Value)
+        wsOrderSheet.Cells(nrow, "P").ClearContents ' 古い予測値をクリア
 
         If brandCode = "" Then
-            Print #fileNum, nrow & "行目のブランドコードが空です。処理をスキップします。商品コード: " & productCode
-            GoTo SkipBrand
+            Print #fileNum, nrow & "行目のブランドコードが空のため、スキップします。"
+            GoTo SkipRow
         End If
 
-        ' 一般リードタイム表でブランドに対応するデータを見つける
+        ' 一般リードタイムシートでブランドを検索
         Set generalLeadTimeRow = wsGeneralLeadTime.Range("A:A").Find(brandCode, LookIn:=xlValues, LookAt:=xlWhole)
         If Not generalLeadTimeRow Is Nothing Then
-            ' 直近平均値を取得
+            ' 最新の平均値を取得
             recentAvg = wsOrderSheet.Cells(nrow, "O").Value
             If IsNumeric(recentAvg) And recentAvg > 0 Then
                 recentAvg = CDbl(recentAvg)
 
-                ' 今日注文可能かを確認
-                leadTimeToday = wsGeneralLeadTime.Cells(generalLeadTimeRow.row, dayOfWeek + 1).Value
-                If Trim(CStr(leadTimeToday)) = "×" Or IsEmpty(leadTimeToday) Then
-                    Print #fileNum, "ブランド: " & brandCode & "、商品コード: " & productCode & "、今日は注文不可またはデータが空です。スキップします。"
-                    GoTo SkipBrand
-                End If
-
-                ' 最初の到着日数を記録
-                If IsNumeric(leadTimeToday) Then
+                ' 当日のリードタイムを取得
+                leadTimeToday = wsGeneralLeadTime.Cells(generalLeadTimeRow.Row, dayOfWeek + 4).Value
+                If IsNumeric(leadTimeToday) And leadTimeToday > 0 Then
                     firstArrivalDays = CInt(leadTimeToday)
                 Else
-                    Print #fileNum, "ブランド: " & brandCode & "、商品コード: " & productCode & "、今日の到着日数が無効です: " & leadTimeToday
-                    GoTo SkipBrand
+                    Print #fileNum, "ブランド: " & brandCode & "、商品: " & productCode & "、当日の注文が不可またはデータが無効です。"
+                    GoTo SkipRow
                 End If
 
-                Print #fileNum, "ブランド: " & brandCode & "、商品コード: " & productCode & "、今日の到着日数: " & firstArrivalDays
-
-                ' 毎日注文可能かを確認
-                isEverydayOrderable = True
+                ' 次回注文間隔とリードタイムを検索
+                nextOrderInterval = 0
+                nextLeadTime = 0
                 For i = 1 To 7
-                    If Trim(CStr(wsGeneralLeadTime.Cells(generalLeadTimeRow.row, i + 1).Value)) = "×" Or _
-                       IsEmpty(wsGeneralLeadTime.Cells(generalLeadTimeRow.row, i + 1).Value) Then
-                        isEverydayOrderable = False
+                    Dim nextDayOfWeek As Integer
+                    nextDayOfWeek = (dayOfWeek + i - 1) Mod 7 + 1 ' 次の日の曜日を計算
+                    nextLeadTime = wsGeneralLeadTime.Cells(generalLeadTimeRow.Row, nextDayOfWeek + 4).Value
+                    If IsNumeric(nextLeadTime) And nextLeadTime > 0 Then
+                        nextOrderInterval = i
+                        nextArrivalDays = CInt(nextLeadTime)
                         Exit For
                     End If
                 Next i
 
-                If isEverydayOrderable Then
-                    ' 毎日注文可能なら、総日数は2回の注文の到着周期
-                    totalDays = firstArrivalDays * 2
-                    Print #fileNum, "ブランド: " & brandCode & "、商品コード: " & productCode & "、毎日注文可能、総日数: " & totalDays
-                Else
-                    ' 次の注文日を探す
-                    secondArrivalDays = 0
-                    daysToNextOrder = 0
-                    For i = 1 To 6 ' 最大で次の週を確認
-                        Dim nextDayOfWeek As Integer
-                        nextDayOfWeek = (dayOfWeek + i - 1) Mod 7 + 1 ' 日曜日からループ
-                        nextLeadTime = wsGeneralLeadTime.Cells(generalLeadTimeRow.row, nextDayOfWeek + 1).Value
-
-                        If IsNumeric(nextLeadTime) Then
-                            daysToNextOrder = i ' 次の注文までの日数
-                            secondArrivalDays = CInt(nextLeadTime) ' 次の到着に必要な日数
-                            Print #fileNum, "ブランド: " & brandCode & "、商品コード: " & productCode & "、次の注文日: " & Format(orderDate + daysToNextOrder, "yyyy-mm-dd") & "、到着に必要な日数: " & secondArrivalDays
-                            Exit For
-                        End If
-                    Next i
-
-                    ' 次の注文日が見つからなければスキップ
-                    If daysToNextOrder = 0 Then
-                        Print #fileNum, "ブランド: " & brandCode & "、商品コード: " & productCode & "、次の注文日が見つかりません。スキップします。"
-                        GoTo SkipBrand
-                    End If
-
-                    ' 総日数を計算
-                    totalDays = firstArrivalDays + secondArrivalDays + daysToNextOrder
-                    Print #fileNum, "ブランド: " & brandCode & "、商品コード: " & productCode & "、総日数: " & totalDays
+                ' 次回注文日が見つからない場合
+                If nextOrderInterval = 0 Then
+                    Print #fileNum, "ブランド: " & brandCode & "、商品: " & productCode & "、次回注文日が見つかりません。"
+                    GoTo SkipRow
                 End If
 
-                ' 予測売れ数を計算
-                wsOrderSheet.Cells(nrow, "P").Value = recentAvg * totalDays
-                Print #fileNum, "ブランド: " & brandCode & "、商品コード: " & productCode & "、直近平均値: " & recentAvg & "、予測売れ数: " & wsOrderSheet.Cells(nrow, "P").Value
+                ' 総日数を計算: 1（当日）+ 次回注文間隔 + 次回リードタイム
+                totalDays = 1 + nextOrderInterval + nextArrivalDays
+
+                ' 予測販売量をP列に書き込む
+                wsOrderSheet.Cells(nrow, "P").Value = totalDays * recentAvg
+
+                ' ログに記録
+                Print #fileNum, "ブランド: " & brandCode & "、商品: " & productCode
+                Print #fileNum, "最初のリードタイム: " & firstArrivalDays
+                Print #fileNum, "次回注文間隔: " & nextOrderInterval
+                Print #fileNum, "次回リードタイム: " & nextArrivalDays
+                Print #fileNum, "総日数: " & totalDays
+                Print #fileNum, "予測販売量: " & wsOrderSheet.Cells(nrow, "P").Value
             Else
-                Print #fileNum, "ブランド: " & brandCode & "、商品コード: " & productCode & "、直近平均値が無効または0です: " & recentAvg
+                Print #fileNum, "ブランド: " & brandCode & "、商品: " & productCode & "、最新平均値が無効です。"
             End If
         Else
-            Print #fileNum, "ブランド: " & brandCode & "、商品コード: " & productCode & "、一般リードタイム表に一致する項目が見つかりません。"
+            Print #fileNum, "ブランド: " & brandCode & "、商品: " & productCode & "、一般リードタイム表に存在しません。"
         End If
-SkipBrand:
+SkipRow:
     Next nrow
 
     ' ログファイルを閉じる
     Close #fileNum
 
-    MsgBox "予測売れ数が算出されました。", vbInformation
+    MsgBox "次回の納品まで販売数の計算が完了しました。", vbInformation
 End Sub
-
