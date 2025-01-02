@@ -1,0 +1,104 @@
+Sub MakePriceCard()
+
+    Dim cell As Range
+    Dim sourceCell As Range
+    Dim productName As String
+    Dim baseRows As Variant, baseCols As Variant
+    Dim rowNum As Variant, colNum As Variant
+    Dim targetCellIndex As Integer
+    Dim segments As Variant
+    Dim segment As Variant
+    Dim startIndex As Integer, endIndex As Integer
+    Dim shp As Shape
+    Dim targetCells As Variant
+    Dim i As Integer
+
+    ' AO6の値を取得（液体物）
+    Set sourceCell = Range("AO6")
+
+    ' 行番号と列の基準を定義
+    baseRows = Array(10, 22, 34, 49, 61, 73, 88, 100, 112) ' 液体物を反映する行番号
+    baseCols = Array("A", "J", "S") ' 液体物を反映する列名
+
+    ' AE列のデータ範囲
+    segments = Array(Array(3, 11, Array(10, 22, 34)), _
+                     Array(42, 50, Array(49, 61, 73)), _
+                     Array(81, 89, Array(88, 100, 112)))
+
+    ' バーコードを表示するセル範囲
+    targetCells = Array("F11", "O11", "X11", "F23", "O23", "X23", "F35", "O35", "X35", "F50", "O50", "X50", _
+                        "F62", "O62", "X62", "F74", "O74", "X74", "F89", "O89", "X89", "F101", "O101", "X101", _
+                        "F113", "O113", "X113")
+
+    ' 画面更新をオフにする
+    Application.ScreenUpdating = False
+
+    ' 指定されたセル内のすべての既存のバーコードを削除
+    For Each shp In ActiveSheet.Shapes
+        If shp.Type = msoOLEControlObject Then
+            If InStr(shp.Name, "Barcode") > 0 Then
+                shp.Delete
+            End If
+        End If
+    Next shp
+
+    ' 指定されたセルを順番に処理し、バーコードを生成
+    For i = LBound(targetCells) To UBound(targetCells)
+        Set cell = Range(targetCells(i))
+        If cell.Value <> "" Then
+            With ActiveSheet.OLEObjects.Add(ClassType:="BARCODE.BarCodeCtrl.1") ' バーコードコントロールを追加
+                .Name = cell.Address & "_Barcode"
+                .Object.Style = 2 ' バーコードスタイルを "Interleaved 2 of 5" に設定
+                .Left = cell.Left + 4 ' バーコードの左側位置をセルの左から4ポイントに設定
+                .Top = cell.Top + 4 ' バーコードの上側位置をセルの上から4ポイントに設定
+                .Height = 23 ' バーコードの高さを23ポイントに設定
+                .Width = 107 ' バーコードの幅を107ポイントに設定
+                .Object.Value = cell.Value ' バーコードの値を設定
+            End With
+        End If
+    Next i
+
+    ' 各セグメントをループ処理
+    For Each segment In segments
+        startIndex = segment(0) ' セグメントの開始行
+        endIndex = segment(1)   ' セグメントの終了行
+        Dim currentRows As Variant
+        currentRows = segment(2)
+
+        targetCellIndex = startIndex
+
+        ' 現在のセグメントの対象行をループ処理
+        For Each rowNum In currentRows
+            For Each colNum In baseCols
+                ' 範囲外の場合は終了
+                If targetCellIndex > endIndex Then Exit For
+
+                ' AE列の値を取得
+                productName = Cells(targetCellIndex, "AE").Value
+                If Left(productName, 1) = "■" Then
+                    ' 対応するセルを更新
+                    Set cell = Range(colNum & rowNum)
+                    cell.Value = sourceCell.Value
+
+                    ' フォントと書式をコピー
+                    cell.Font.Name = sourceCell.Font.Name
+                    cell.Font.Size = sourceCell.Font.Size
+                    cell.Font.Color = sourceCell.Font.Color
+                    cell.Font.Bold = sourceCell.Font.Bold
+                    cell.Interior.Color = sourceCell.Interior.Color
+                    cell.HorizontalAlignment = sourceCell.HorizontalAlignment
+                    cell.VerticalAlignment = sourceCell.VerticalAlignment
+                End If
+
+                ' 次のAEデータ
+                targetCellIndex = targetCellIndex + 1
+            Next colNum
+        Next rowNum
+    Next segment
+
+    ' 画面更新をオン
+    Application.ScreenUpdating = True
+
+    MsgBox "処理が完了しました！"
+
+End Sub
