@@ -1,0 +1,72 @@
+Sub 日報日別予算更新()
+    Dim wbシフト As Workbook         ' シフト表が含まれるブック
+    Dim wsシフト As Worksheet       ' シフト表のシート
+    Dim ws日報 As Worksheet         ' 日報シート
+    Dim filePath As Variant         ' 選択されたファイルパス
+    Dim i As Long
+    
+    ' 日報シートを設定（このブック内）
+    Set ws日報 = ThisWorkbook.Sheets("日報")
+    
+    ' ファイル選択ダイアログを表示して、シフト表ファイルを選択
+    filePath = Application.GetOpenFilename( _
+               "Excelファイル (*.xls; *.xlsx; *.xlsm), *.xls; *.xlsx; *.xlsm", _
+               , "シフト表ファイルを選択してください")
+    If filePath = False Then
+        MsgBox "ファイルが選択されませんでした。", vbExclamation
+        Exit Sub
+    End If
+    
+    ' 選択したファイルを開く
+    Set wbシフト = Workbooks.Open(filePath)
+    
+    ' ユーザーにシートをマウスで選択させる
+    wbシフト.Activate
+    MsgBox "シフト表のシートを選択するため、" & vbCrLf & _
+           "下部のシートタブをクリックしてから[OK]を押してください。", _
+           vbInformation, "シート選択"
+    
+    ' [OK]押下時点でアクティブになっているシートを取得
+    Set wsシフト = ActiveSheet
+    
+    ' -------------------------------------------------------------
+    ' 1) 排班表の C4 の値を 日報シート D4 にコピー
+    ' -------------------------------------------------------------
+    ws日報.Range("D4").Value = wsシフト.Range("C4").Value
+    
+    ' -------------------------------------------------------------
+    ' 2) I4 ～ AM4 の 31日分の目標売上額を、
+    '    日報シート上の指定セルに 1日目から順にコピー
+    '
+    '  - 下記は「列 D,O,Z,AK,AV,BG,BG,BR,CC × 行 3,17,30,44」の
+    '    合計36個のセルを並べた例。実際には31日分だけを使用。
+    '  - もし列や行が違う場合は自由に修正してください。
+    ' -------------------------------------------------------------
+    Dim targetCells As Variant
+    targetCells = Array( _
+        "D3", "D17", "D30", "D44", _
+        "O3", "O17", "O30", "O44", _
+        "Z3", "Z17", "Z30", "Z44", _
+        "AK3", "AK17", "AK30", "AK44", _
+        "AV3", "AV17", "AV30", "AV44", _
+        "BG3", "BG17", "BG30", "BG44", _
+        "BR3", "BR17", "BR30", "BR44", _
+        "CC3", "CC17", "CC30", "CC44" _
+    )
+    
+    ' I4 はシフト表の第9列 → 日付1日目
+    ' J4 は第10列 → 日付2日目
+    ' ...
+    ' AM4 は第39列 → 31日目
+    '
+    ' 下記ループでは 31日分だけ更新し、配列の後ろ5個は無視。
+    For i = 0 To 30  ' 0～30 で 31回
+        ws日報.Range(targetCells(i)).Value = wsシフト.Cells(4, 9 + i).Value
+    Next i
+    
+    ' 完了メッセージ
+    MsgBox "日報の更新が完了しました!", vbInformation
+    
+    ' シフトブックを保存せずに閉じる（必要に応じて変更可能）
+    wbシフト.Close SaveChanges:=False
+End Sub
