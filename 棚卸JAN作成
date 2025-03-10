@@ -1,7 +1,7 @@
 Sub MakeBarcode_Click()
     Dim 元シート As Worksheet
     Dim 対象シート As Worksheet
-    Dim i As Long, 行番号 As Long
+    Dim i As Long
     Dim バーコード値 As String
     Dim 対象セル As Variant
     Dim セル As Range
@@ -31,10 +31,10 @@ Sub MakeBarcode_Click()
     Delete_Click
     
     ' B列データ処理（B2から開始）
-    For i = 2 To 2 + UBound(対象セル)
-        If 元シート.Cells(i, "B").Value = "" Then Exit For
+    For i = 3 To 2 + UBound(対象セル)
+        If 元シート.Cells(i, "C").Value = "" Then Exit For
         
-        バーコード値 = CStr(元シート.Cells(i, "B").Value)
+        バーコード値 = CStr(元シート.Cells(i, "C").Value)
         
         ' 各データに対して2つのバーコードを生成（B列とM列）
         If i - 2 > UBound(対象セル) Then Exit For
@@ -56,6 +56,10 @@ Sub MakeBarcode_Click()
             .Object.Style = 2  ' JANコード形式
             .Object.Value = バーコード値
         End With
+        
+        ' ★★★ 削除した部分（商品名をバーコード下に追加しない）★★★
+        ' セル.Offset(6, 0).Value = 商品名 ' ← これを削除
+
     Next i
 
 エラーハンドラ:
@@ -73,7 +77,6 @@ Sub MakeBarcode_Click()
         MsgBox "エラーが発生しました: " & Err.Description, vbCritical
     End If
 End Sub
-
 Sub Delete_Click()
     Dim オブジェクト As OLEObject
     Dim 対象シート As Worksheet
@@ -88,5 +91,3 @@ Sub Delete_Click()
         End If
     Next i
 End Sub
-
-
