@@ -1,0 +1,120 @@
+Sub MakeBarcode_Click()
+    Dim 元シート As Worksheet
+    Dim 対象シート As Worksheet
+    Dim i As Long
+    Dim バーコード値 As String
+    Dim 対象セル As Variant
+    Dim セル As Range
+    Dim バーコード幅 As Double: バーコード幅 = 218
+    Dim バーコード高さ As Double: バーコード高さ = 111
+    Dim エラーリスト As String ' エラーのセル情報を記録する変数
+    
+    On Error GoTo エラーハンドラ
+    
+    ' ★★★ 画面更新停止 ★★★
+    With Application
+        .ScreenUpdating = False
+        .EnableEvents = False
+        .Calculation = xlCalculationManual
+        .DisplayStatusBar = False
+    End With
+    
+    ' シート定義
+    Set 元シート = Worksheets("商品データ")
+    Set 対象シート = Worksheets("JANシート")
+    
+    ' 対象セル定義
+    対象セル = Array("B8", "M8", "B28", "M28", "B48", "M48", _
+                  "B68", "M68", "B88", "M88", "B108", "M108", _
+                  "B128", "M128", "B148", "M148")
+    
+    ' 古いバーコードを削除
+    Delete_Click
+    
+    ' B列データ処理
+    For i = 2 To 2 + UBound(対象セル)
+        If 元シート.Cells(i, "C").Value = "" Then Exit For
+        
+        バーコード値 = CStr(元シート.Cells(i, "C").Value)
+        
+        ' ▼▼▼ 入力値チェック ▼▼▼
+        If Not IsNumeric(バーコード値) Then
+            エラーリスト = エラーリスト & "セル C" & i & "（数値ではない）" & vbCrLf
+            GoTo 次へ ' エラーがあっても処理を続行
+        End If
+        
+        Select Case Len(バーコード値)
+            Case 8, 13
+                ' 正常処理
+            Case Else
+                エラーリスト = エラーリスト & "セル C" & i & "（桁数エラー：" & Len(バーコード値) & "桁）" & vbCrLf
+                GoTo 次へ
+        End Select
+        
+        If i - 2 > UBound(対象セル) Then Exit For
+        
+        Set セル = 対象シート.Range(対象セル(i - 2))
+        
+        With 対象シート.OLEObjects.Add( _
+            ClassType:="BARCODE.BarCodeCtrl.1", _
+            Link:=False, _
+            DisplayAsIcon:=False)
+            
+            ' ★★★ 中央揃え計算（修正）★★★
+            .Left = セル.Left + (セル.Width - バーコード幅) / 10
+            .Top = セル.Top + (セル.Height - バーコード高さ) / 88
+            .Width = バーコード幅
+            .Height = バーコード高さ
+            
+            ' ★★★ バーコードのスタイル設定 ★★★
+            Select Case Len(バーコード値)
+                Case 13
+                    .Object.Style = 2  ' JAN13
+                Case 8
+                    .Object.Style = 3  ' JAN8
+            End Select
+            
+            .Name = "バーコード_" & セル.Address
+            .Object.Value = バーコード値
+            
+            ' ▼▼▼ ShowText プロパティを直接設定 ▼▼▼
+            On Error Resume Next
+            .Object.ShowText = False
+            On Error GoTo 0
+        End With
+        
+次へ:
+    Next i
+
+エラーハンドラ:
+    ' ★★★ 設定リセット ★★★
+    With Application
+        .ScreenUpdating = True
+        .EnableEvents = True
+        .Calculation = xlCalculationAutomatic
+        .DisplayStatusBar = True
+    End With
+    
+    ' エラーリストがある場合、まとめて通知
+    If エラーリスト <> "" Then
+        MsgBox "以下のセルでエラーが発生し、スキップしました：" & vbCrLf & エラーリスト, vbExclamation
+    End If
+    
+    MsgBox "バーコード生成が完了しました！", vbInformation
+End Sub
+
+' ★★★ バーコード削除関数 ★★★
+Sub Delete_Click()
+    Dim オブジェクト As OLEObject
+    Dim 対象シート As Worksheet
+    Set 対象シート = Worksheets("JANシート")
+    
+    Application.ScreenUpdating = False
+    For i = 対象シート.OLEObjects.Count To 1 Step -1
+        Set オブジェクト = 対象シート.OLEObjects(i)
+        If TypeName(オブジェクト.Object) = "BarCodeCtrl" Then
+            オブジェクト.Delete
+        End If
+    Next i
+    Application.ScreenUpdating = True
+End Sub
