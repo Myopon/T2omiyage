@@ -1,0 +1,92 @@
+Sub MakeBarcode_Click()
+    Dim 元シート As Worksheet
+    Dim 対象シート As Worksheet
+    Dim i As Long, 行番号 As Long
+    Dim バーコード値 As String
+    Dim 対象セル As Variant
+    Dim セル As Range
+    Dim バーコード幅 As Double: バーコード幅 = 218 ' バーコードの幅
+    Dim バーコード高さ As Double: バーコード高さ = 111  ' バーコードの高さ
+    
+    On Error GoTo エラーハンドラ
+    
+    ' ★★★ 画面更新完全停止 ★★★
+    With Application
+        .ScreenUpdating = False
+        .EnableEvents = False
+        .Calculation = xlCalculationManual
+        .DisplayStatusBar = False
+    End With
+    
+    ' シート定義
+    Set 元シート = Worksheets("商品データ")
+    Set 対象シート = Worksheets("JANシート")
+    
+    ' 対象セル定義（B列とM列に20行間隔で配置）
+    対象セル = Array("B8", "M8", "B28", "M28", "B48", "M48", _
+                  "B68", "M68", "B88", "M88", "B108", "M108", _
+                  "B128", "M128", "B148", "M148")
+    
+    ' 古いバーコードを削除
+    Delete_Click
+    
+    ' B列データ処理（B2から開始）
+    For i = 2 To 2 + UBound(対象セル)
+        If 元シート.Cells(i, "B").Value = "" Then Exit For
+        
+        バーコード値 = CStr(元シート.Cells(i, "B").Value)
+        
+        ' 各データに対して2つのバーコードを生成（B列とM列）
+        If i - 2 > UBound(対象セル) Then Exit For
+        
+        Set セル = 対象シート.Range(対象セル(i - 2))
+        
+        With 対象シート.OLEObjects.Add( _
+            ClassType:="BARCODE.BarCodeCtrl.1", _
+            Link:=False, _
+            DisplayAsIcon:=False)
+            
+            ' ★★★ 中央揃え計算 ★★★
+            .Left = セル.Left + (セル.Width - バーコード幅) / 10
+            .Top = セル.Top + (セル.Height - バーコード高さ) / 88
+            .Width = バーコード幅
+            .Height = バーコード高さ
+            
+            .Name = "バーコード_" & セル.Address
+            .Object.Style = 2  ' JANコード形式
+            .Object.Value = バーコード値
+        End With
+    Next i
+
+エラーハンドラ:
+    ' ★★★ 設定を必ず元に戻す ★★★
+    With Application
+        .ScreenUpdating = True
+        .EnableEvents = True
+        .Calculation = xlCalculationAutomatic
+        .DisplayStatusBar = True
+    End With
+    
+    If Err.Number = 0 Then
+        MsgBox "バーコードの生成が完了しました！"
+    Else
+        MsgBox "エラーが発生しました: " & Err.Description, vbCritical
+    End If
+End Sub
+
+Sub Delete_Click()
+    Dim オブジェクト As OLEObject
+    Dim 対象シート As Worksheet
+    Set 対象シート = Worksheets("JANシート")
+    
+    ' ★★★ 逆順で削除（パフォーマンス向上）★★★
+    Dim i As Long
+    For i = 対象シート.OLEObjects.Count To 1 Step -1
+        Set オブジェクト = 対象シート.OLEObjects(i)
+        If TypeName(オブジェクト.Object) = "BarCodeCtrl" Then
+            オブジェクト.Delete
+        End If
+    Next i
+End Sub
+
+
